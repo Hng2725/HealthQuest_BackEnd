@@ -30,6 +30,11 @@ const taskSchema = new mongoose.Schema(
       enum: ['system', 'custom'],
       default: 'custom',
     },
+    frequency: {
+      type: String,
+      enum: ['Once', 'Daily'],
+      default: 'Once',
+    },
     expReward: {
       type: Number,
       default: 10,

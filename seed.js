@@ -24,9 +24,10 @@ const seedDatabase = async () => {
         priority: 'Medium',
         category: 'Health',
         type: 'system',
+        frequency: 'Daily',
         expReward: 20,
         coinReward: 5,
-        status: 'pending' // Note: system tasks act as templates, usually in actual app logic users clone them or complete instances of them. For simplicity, we just have them available to complete.
+        status: 'pending'
       },
       {
         title: 'Morning Workout 🏃',
@@ -34,6 +35,7 @@ const seedDatabase = async () => {
         priority: 'High',
         category: 'Fitness',
         type: 'system',
+        frequency: 'Daily',
         expReward: 50,
         coinReward: 15,
         status: 'pending'
@@ -44,6 +46,7 @@ const seedDatabase = async () => {
         priority: 'Low',
         category: 'Productivity',
         type: 'system',
+        frequency: 'Daily',
         expReward: 30,
         coinReward: 10,
         status: 'pending'

@@ -19,7 +19,23 @@ exports.getTasks = async (req, res) => {
       $or: [{ type: 'system' }, { user: req.user._id }],
     }).sort({ createdAt: -1 });
 
-    res.json(tasks);
+    const today = new Date().toISOString().split('T')[0];
+    const user = await User.findById(req.user._id);
+
+    // Map tasks to include the dynamic status for Daily tasks
+    const tasksWithStatus = tasks.map(task => {
+      const taskObj = task.toObject();
+      if (task.frequency === 'Daily') {
+        const logs = user.dailyQuestLogs || [];
+        const isCompletedToday = logs.some(
+          log => log.taskId && log.taskId.toString() === task._id.toString() && log.date === today
+        );
+        taskObj.status = isCompletedToday ? 'completed' : 'pending';
+      }
+      return taskObj;
+    });
+
+    res.json(tasksWithStatus);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -223,53 +239,59 @@ exports.deleteTask = async (req, res) => {
 exports.completeTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
-
-    if (task) {
-      if (task.status === 'completed') {
-        return res.status(400).json({ message: 'Task is already completed' });
-      }
-
-      // If it's a generic system task, we could duplicate it for the user. 
-      // For simplicity in this demo, let's assume the user completes the system template directly if allowed, 
-      // or we handle tracking differently. Let's just track it on the user side for now.
-      
-      const user = await User.findById(req.user._id);
-      
-      if (task.type !== 'system') {
-        task.status = 'completed';
-        task.completedAt = new Date();
-        await task.save();
-      }
-
-      // If it's a system task, we don't save the 'completed' status globally because it's a template for all users.
-      // We just directly grant the rewards to the user.
-
-      user.exp += task.expReward;
-      user.coins += task.coinReward;
-
-      // Leveling logic: 100 EXP per level (simplified)
-      const expNeeded = user.level * 100;
-      if (user.exp >= expNeeded && user.level < 30) {
-        user.level += 1;
-        user.exp -= expNeeded; // carry over
-      }
-
-      await user.save();
-
-      res.json({
-        message: 'Task completed successfully',
-        rewards: {
-          expAdded: task.expReward,
-          coinsAdded: task.coinReward,
-          newLevel: user.level,
-          newExp: user.exp,
-          newCoins: user.coins
-        }
-      });
-    } else {
-      res.status(404).json({ message: 'Task not found' });
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
     }
+
+    const user = await User.findById(req.user._id);
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check if task was already completed today (if Daily)
+    if (task.frequency === 'Daily') {
+      if (!user.dailyQuestLogs) user.dailyQuestLogs = [];
+      const alreadyDone = user.dailyQuestLogs.some(
+        log => log.taskId && log.taskId.toString() === task._id.toString() && log.date === today
+      );
+      if (alreadyDone) {
+        return res.status(400).json({ message: 'Bạn đã hoàn thành nhiệm vụ này hôm nay rồi!' });
+      }
+      // Add to daily log
+      user.dailyQuestLogs.push({ taskId: task._id, date: today });
+    } else {
+      // For 'Once' tasks
+      if (task.status === 'completed') {
+        return res.status(400).json({ message: 'Nhiệm vụ này đã được hoàn thành' });
+      }
+      task.status = 'completed';
+      task.completedAt = new Date();
+      await task.save();
+    }
+
+    // Grant rewards
+    user.exp += task.expReward;
+    user.coins += task.coinReward;
+
+    // Leveling logic: 100 EXP per level (simplified)
+    const expNeeded = user.level * 100;
+    if (user.exp >= expNeeded && user.level < 30) {
+      user.level += 1;
+      user.exp -= expNeeded;
+    }
+
+    await user.save();
+
+    res.json({
+      message: 'Hoàn thành nhiệm vụ thành công!',
+      rewards: {
+        expAdded: task.expReward,
+        coinsAdded: task.coinReward,
+        newLevel: user.level,
+        newExp: user.exp,
+        newCoins: user.coins
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Error completing task:', error);
+    res.status(500).json({ message: error.message || 'Lỗi server' });
   }
 };
