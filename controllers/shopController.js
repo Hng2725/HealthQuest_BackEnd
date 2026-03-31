@@ -131,3 +131,30 @@ exports.equipBackground = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+/**
+ * @swagger
+ * /api/shop/unequip:
+ *   post:
+ *     summary: Unequip the current background
+ *     tags: [Shop]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Background unequipped
+ */
+exports.unequipBackground = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    user.currentBackground = null;
+    await user.save();
+
+    res.json({
+      message: 'Background unequipped successfully',
+      currentBackground: null,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

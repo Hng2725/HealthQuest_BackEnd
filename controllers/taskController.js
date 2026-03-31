@@ -80,7 +80,7 @@ exports.getTasks = async (req, res) => {
  */
 exports.createTask = async (req, res) => {
   try {
-    const { title, description, priority, category, expReward, coinReward, deadline } = req.body;
+    const { title, description, priority, category, expReward, coinReward, deadline, frequency } = req.body;
 
     const task = new Task({
       user: req.user._id,
@@ -92,6 +92,7 @@ exports.createTask = async (req, res) => {
       expReward,
       coinReward,
       deadline,
+      frequency,
     });
 
     const createdTask = await task.save();
@@ -142,7 +143,7 @@ exports.createTask = async (req, res) => {
  */
 exports.updateTask = async (req, res) => {
   try {
-    const { title, description, priority, category, deadline } = req.body;
+    const { title, description, priority, category, deadline, frequency } = req.body;
 
     const task = await Task.findById(req.params.id);
 
@@ -160,6 +161,7 @@ exports.updateTask = async (req, res) => {
       task.priority = priority || task.priority;
       task.category = category || task.category;
       task.deadline = deadline || task.deadline;
+      task.frequency = frequency || task.frequency;
 
       const updatedTask = await task.save();
       res.json(updatedTask);
