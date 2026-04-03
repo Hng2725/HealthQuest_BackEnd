@@ -297,3 +297,108 @@ exports.completeTask = async (req, res) => {
     res.status(500).json({ message: error.message || 'Lỗi server' });
   }
 };
+
+/**
+ * @swagger
+ * /api/tasks/stats:
+ *   get:
+ *     summary: Get task completion statistics
+ *     tags: [Tasks]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Statistics data
+ */
+exports.getTaskStats = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).populate('dailyQuestLogs.taskId');
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // 1. Daily Stats (Breaking down today's completed tasks by category)
+    const dailyCompleted = [];
+    
+    // From daily logs
+    if (user.dailyQuestLogs) {
+      user.dailyQuestLogs.forEach(log => {
+        if (log.date === todayStr && log.taskId) {
+          dailyCompleted.push({
+            title: log.taskId.title,
+            category: log.taskId.category,
+            type: 'Daily'
+          });
+        }
+      });
+    }
+    
+    // From one-time tasks
+    const startOfToday = new Date(todayStr);
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
+    
+    const onceTasksToday = await Task.find({
+      user: req.user._id,
+      frequency: 'Once',
+      status: 'completed',
+      completedAt: {
+        $gte: startOfToday,
+        $lt: endOfToday
+      }
+    });
+    
+    onceTasksToday.forEach(task => {
+      dailyCompleted.push({
+        title: task.title,
+        category: task.category,
+        type: 'Once'
+      });
+    });
+
+    const dailyStats = dailyCompleted.reduce((acc, curr) => {
+      const categoryName = curr.category || 'Other';
+      const idx = acc.findIndex(item => item.name === categoryName);
+      if (idx > -1) {
+        acc[idx].value += 1;
+      } else {
+        acc.push({ name: categoryName, value: 1 });
+      }
+      return acc;
+    }, []);
+
+    // 2. Weekly Stats (Last 7 days)
+    const weeklyData = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      // Count daily logged tasks for this date
+      const dailyCount = user.dailyQuestLogs ? user.dailyQuestLogs.filter(log => log.date === dateStr).length : 0;
+      
+      // Count once tasks completed on this date
+      const startOfDay = new Date(dateStr);
+      const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+      
+      const onceCount = await Task.countDocuments({
+        user: req.user._id,
+        frequency: 'Once',
+        status: 'completed',
+        completedAt: { $gte: startOfDay, $lt: endOfDay }
+      });
+      
+      weeklyData.push({
+        date: dateStr,
+        day: dayName,
+        completed: dailyCount + onceCount
+      });
+    }
+
+    res.json({
+      daily: dailyStats,
+      weekly: weeklyData
+    });
+  } catch (error) {
+    console.error('Error fetching task stats:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
